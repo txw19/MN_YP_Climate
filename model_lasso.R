@@ -76,12 +76,13 @@ lake_dat_sub[, z_area := as.numeric(scale(log(area.hectares)))]
 lake_dat_sub[, z_littoral := as.numeric(scale(prop.littoral))]
 lake_dat_sub[, z_depth := as.numeric(scale(log(max_depth_m)))]
 lake_dat_sub[, z_secchi := as.numeric(scale(Secchi.lake.mean))]
+lake_dat_sub[, z_alk := as.numeric(scale(alkalinity))]
 lake_dat_sub[, z_gddMean := as.numeric(scale(mean.gdd))]
 
-lake_cor <- lake_dat_sub[,c(9:12)]
-cor(lake_cor)
+lake_cor <- lake_dat_sub[,c(9:14)]
+cor(lake_cor,use = "complete.obs")
 
-# hist(log(lake_dat_sub$mean.gdd))
+# hist(lake_dat_sub$alkalinity)
 #################################################################
 ########## BUGS CODE ############################################
 #################################################################
