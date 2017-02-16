@@ -100,7 +100,8 @@ cat("
     # Level-2 of the model
     for(j in 1:J){
       alpha[j] ~ dnorm(mu.alpha.hat[j],tau.alpha)
-      mu.alpha.hat[j] <- mu.alpha
+      mu.alpha.hat[j] <- mu.alpha + s[1] * z1[i] + s[2] * z2[i] + s[3] * z3[i] + s[4] * z4[i] 
+                          # + s[5] * z5[i]+ s[6] * z6[i] 
     }
     
     # Priors
@@ -114,10 +115,16 @@ cat("
     for(k in 1:8){
         b[k] ~ ddexp(0, lambda)
     }
+
+    # Level-2 predictors
+    for(k in 1:4){
+        s[k] ~ ddexp(0, lambda2)
+    }
     
     # Hyper-prior on lambda
     # lambda ~ dexp(10)
-    lambda~dgamma(0.1,0.1)
+    lambda ~ dgamma(0.1,0.1)
+    lambda2 ~ dgamma(0.1,0.1)
     # lambda~dgamma(0.01,0.01)
 
     # Derived quantities
@@ -126,6 +133,8 @@ cat("
 
 # Calculate marginal and conditional R2
   for (i in 1:n){
+    # predictY[i] <- mu[i]
+
     predictY[i] <- alpha[group[i]] + b[1] * x1[i] + b[2] * x2[i] + b[3] * x3[i] + b[4] * x4[i] + 
                                 b[5] * x5[i] + b[6] * x6[i] + b[7] * x7[i] + b[8] * x8[i] 
 }
@@ -151,7 +160,8 @@ cpe_gdd[, G := as.numeric(as.factor(as.numeric(DOW)))]
 # Load data
 data <- list(y = cpe_gdd$log_yp_cpe, group = cpe_gdd$G, n = cpe_gdd[,.N], J = J,
              x1 = cpe_gdd$z_gdd, x2 = cpe_gdd$z_gdd1, x3 = cpe_gdd$z_gdd2, x4 = cpe_gdd$z_gdd3,
-             x5 = cpe_gdd$z_gdd4, x6 = cpe_gdd$z_gdd5, x7 = cpe_gdd$z_gddma, x8 = cpe_gdd$z_wae_cpe)
+             x5 = cpe_gdd$z_gdd4, x6 = cpe_gdd$z_gdd5, x7 = cpe_gdd$z_gddma, x8 = cpe_gdd$z_wae_cpe,
+             z1 = lake_dat_sub$z_area, z2 = lake_dat_sub$z_littoral, z3 = lake_dat_sub$z_depth, z4 = lake_dat_sub$z_gddMean)
 
 
 # Initial values
