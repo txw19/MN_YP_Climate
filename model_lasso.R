@@ -4,6 +4,7 @@ library(MCMCpack) # rwish function
 library(plyr)
 library(data.table)
 library(car)
+library(Metrics)
 
 ########################################################
 # CPE data
@@ -251,6 +252,18 @@ box()
 par(def.par)
 dev.off()
 ### END PLOT
+
+## Calculate RMSE
+rmse(observed, predicted)
+
+rmse_sim <- numeric()
+for(i in 1:out$BUGSoutput$n.sims){
+  rmse_sim[i] <- rmse(observed, out$BUGSoutput$sims.list$predictY[i,])
+  
+}
+
+mean(rmse_sim)
+quantile(rmse_sim, c(0.05, 0.95))
 
 # out.array <- out$BUGSoutput$sims.array
 # output <- rbind(out.array[,1,],out.array[,2,],out.array[,3,]) #convert to matrix; the matrix directly from out output (out$BUGSoutput$sims.matrix) does not sort by chain
