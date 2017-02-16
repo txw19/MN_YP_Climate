@@ -100,8 +100,8 @@ cat("
     # Level-2 of the model
     for(j in 1:J){
       alpha[j] ~ dnorm(mu.alpha.hat[j],tau.alpha)
-      mu.alpha.hat[j] <- mu.alpha + s[1] * z1[i] + s[2] * z2[i] + s[3] * z3[i] + s[4] * z4[i] 
-                          # + s[5] * z5[i]+ s[6] * z6[i] 
+      mu.alpha.hat[j] <- mu.alpha + s[1] * z1[j] + s[2] * z2[j] + s[3] * z3[j] + s[4] * z4[j] 
+                          # + s[5] * z5[j]+ s[6] * z6[j] 
     }
     
     # Priors
@@ -133,14 +133,12 @@ cat("
 
 # Calculate marginal and conditional R2
   for (i in 1:n){
-    # predictY[i] <- mu[i]
+    predictY[i] <- mu[i]
 
-    predictY[i] <- alpha[group[i]] + b[1] * x1[i] + b[2] * x2[i] + b[3] * x3[i] + b[4] * x4[i] + 
-                                b[5] * x5[i] + b[6] * x6[i] + b[7] * x7[i] + b[8] * x8[i] 
 }
- Vfixed<-(sd(predictY))^2
 
- Vresidual <- 1/tau # get the vaiance of residuals
+ Vfixed<-(sd(predictY))^2
+ Vresidual <- 1/tau # get the variance of residuals
  Vrandom <- 1/tau.alpha  # get the variance of random intercept
  marginalR2 <- Vfixed/(Vfixed+Vrandom+Vresidual) # calculate marginalR2 (fixed effects only)
  conditionalR2 <- (Vrandom+Vfixed)/(Vfixed+Vrandom+Vresidual) # calculate conditional R2 (fixed + random)
@@ -171,13 +169,14 @@ inits <- function (){
 
 
 # Parameters monitored
-parameters <- c("mu.alpha","alpha","sigma", "sigma.alpha","b","lambda","marginalR2","conditionalR2")
+parameters <- c("mu.alpha","sigma", "sigma.alpha","b","lambda",
+                "predictY","marginalR2","conditionalR2","lambda2","s")
 
 
 # MCMC settings
-ni <- 70000
-nt <- 1
-nb <- 50000
+ni <- 90000
+nt <- 2
+nb <- 70000
 nc <- 3
 
 
@@ -198,9 +197,9 @@ which(out$BUGSoutput$summary[, c("Rhat")] > 1.1)
 
 # Summarize posteriors
 print(out, dig = 3)
-traceplot(out)
+# traceplot(out)
 
-str(out)
+# str(out)
 
 betaEsts <- matrix(NA, nrow=3,ncol=8)
 for(i in 1:8){
@@ -210,23 +209,66 @@ for(i in 1:8){
 betaEsts
 
 
-out.array <- out$BUGSoutput$sims.array
-output <- rbind(out.array[,1,],out.array[,2,],out.array[,3,]) #convert to matrix; the matrix directly from out output (out$BUGSoutput$sims.matrix) does not sort by chain
+sEsts <- matrix(NA, nrow=3,ncol=4)
+for(i in 1:4){
+  sEsts[1,i] <- mean(quantile(out$BUGSoutput$sims.list$s[,i],c(0.05,0.95)))
+  sEsts[2:3,i] <- quantile(out$BUGSoutput$sims.list$s[,i],c(0.05,0.95))
+}
+sEsts
 
-# Number of samples retained
-n.keep <-out$BUGSoutput$n.keep
 
-# Trace plots
-y.min=min(output[,'lambda'],na.rm=T)
-y.max=max(output[,'lambda'],na.rm=T)
-plot(x=1:n.keep,y=output[1:n.keep,'lambda'],type='l',lwd=1,col='red',ylim=c(y.min,y.max),main=NULL)
-lines(x=1:n.keep,y=output[(n.keep+1):(n.keep*2),'lambda'],type='l',lwd=1,col='green')
-lines(x=1:n.keep,y=output[(2*n.keep+1):(n.keep*3),'lambda'],type='l',lwd=1,col='blue') #3 chains in total
+predicted <- out$BUGSoutput$mean$predictY
+observed <- cpe_gdd$log_yp_cpe
 
-y.min=min(output[,'b[1]'],na.rm=T)
-y.max=max(output[,'b[1]'],na.rm=T)
-plot(x=1:n.keep,y=output[1:n.keep,'b[1]'],type='l',lwd=1,col='red',ylim=c(y.min,y.max),main=NULL)
-lines(x=1:n.keep,y=output[(n.keep+1):(n.keep*2),'b[1]'],type='l',lwd=1,col='green')
-lines(x=1:n.keep,y=output[(2*n.keep+1):(n.keep*3),'b[1]'],type='l',lwd=1,col='blue') #3 chains in total
+res <- 6
+name_figure <- "observed_predicted_cpe.jpg"
+jpeg(filename = name_figure, height = 500*res, width = 500*res, res=72*res)
+def.par <- par(no.readonly = TRUE) 		# save default, for resetting...
+
+nf <- layout(matrix(c(1:1),nrow=1,ncol=1,byrow=TRUE),  TRUE) 
+layout.show(nf)
+par(mar=c(0.5,0.5,0,0), oma=c(2,2,0,0) )
+
+size.labels = 1
+size.text = 1.0
+y.label = expression(paste('Predicted ',log[e],'(CPE)' ))
+x.label = expression(paste('Observed ',log[e],'(CPE)' ))
+
+plot(predicted ~ observed, type='n', axes=F, ylim=c(min(predicted), max(predicted)),
+     xlab='',ylab='', xlim=c(min(observed),max(observed)) )
+axis(side=1,cex.axis=size.text, tck=-0.01, mgp=c(0,0.3,0) )
+axis(side=2,cex.axis=size.text, las=1, mgp=c(0,0.3,0),tck=-0.01)
+
+# Add data points
+points(observed, predicted, pch=16, cex=1.0, col='black')
+
+# Add axis labels
+mtext(x.label, line = 0.7, side = 1, cex = size.text, outer=T)
+mtext(y.label, line = 0.5, side = 2, cex = size.text, outer=T)
+abline(0,1, lwd=2, col="blue")
+
+box()
+par(def.par)
+dev.off()
+### END PLOT
+
+# out.array <- out$BUGSoutput$sims.array
+# output <- rbind(out.array[,1,],out.array[,2,],out.array[,3,]) #convert to matrix; the matrix directly from out output (out$BUGSoutput$sims.matrix) does not sort by chain
+# 
+# # Number of samples retained
+# n.keep <-out$BUGSoutput$n.keep
+# 
+# # Trace plots
+# y.min=min(output[,'lambda'],na.rm=T)
+# y.max=max(output[,'lambda'],na.rm=T)
+# plot(x=1:n.keep,y=output[1:n.keep,'lambda'],type='l',lwd=1,col='red',ylim=c(y.min,y.max),main=NULL)
+# lines(x=1:n.keep,y=output[(n.keep+1):(n.keep*2),'lambda'],type='l',lwd=1,col='green')
+# lines(x=1:n.keep,y=output[(2*n.keep+1):(n.keep*3),'lambda'],type='l',lwd=1,col='blue') #3 chains in total
+# 
+# y.min=min(output[,'b[1]'],na.rm=T)
+# y.max=max(output[,'b[1]'],na.rm=T)
+# plot(x=1:n.keep,y=output[1:n.keep,'b[1]'],type='l',lwd=1,col='red',ylim=c(y.min,y.max),main=NULL)
+# lines(x=1:n.keep,y=output[(n.keep+1):(n.keep*2),'b[1]'],type='l',lwd=1,col='green')
+# lines(x=1:n.keep,y=output[(2*n.keep+1):(n.keep*3),'b[1]'],type='l',lwd=1,col='blue') #3 chains in total
 
 
