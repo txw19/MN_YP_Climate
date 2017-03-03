@@ -199,6 +199,8 @@ which(out$BUGSoutput$summary[, c("Rhat")] > 1.1)
 # Summarize posteriors
 print(out, dig = 3)
 # traceplot(out)
+# outExp <- out$BUGSoutput$summary
+# write.csv(outExp, "ModelSummary.csv", row.names = T)
 
 # str(out)
 
@@ -265,23 +267,81 @@ for(i in 1:out$BUGSoutput$n.sims){
 mean(rmse_sim)
 quantile(rmse_sim, c(0.05, 0.95))
 
-# out.array <- out$BUGSoutput$sims.array
-# output <- rbind(out.array[,1,],out.array[,2,],out.array[,3,]) #convert to matrix; the matrix directly from out output (out$BUGSoutput$sims.matrix) does not sort by chain
-# 
-# # Number of samples retained
-# n.keep <-out$BUGSoutput$n.keep
-# 
-# # Trace plots
-# y.min=min(output[,'lambda'],na.rm=T)
-# y.max=max(output[,'lambda'],na.rm=T)
-# plot(x=1:n.keep,y=output[1:n.keep,'lambda'],type='l',lwd=1,col='red',ylim=c(y.min,y.max),main=NULL)
-# lines(x=1:n.keep,y=output[(n.keep+1):(n.keep*2),'lambda'],type='l',lwd=1,col='green')
-# lines(x=1:n.keep,y=output[(2*n.keep+1):(n.keep*3),'lambda'],type='l',lwd=1,col='blue') #3 chains in total
-# 
-# y.min=min(output[,'b[1]'],na.rm=T)
-# y.max=max(output[,'b[1]'],na.rm=T)
-# plot(x=1:n.keep,y=output[1:n.keep,'b[1]'],type='l',lwd=1,col='red',ylim=c(y.min,y.max),main=NULL)
-# lines(x=1:n.keep,y=output[(n.keep+1):(n.keep*2),'b[1]'],type='l',lwd=1,col='green')
-# lines(x=1:n.keep,y=output[(2*n.keep+1):(n.keep*3),'b[1]'],type='l',lwd=1,col='blue') #3 chains in total
+#####################################################
+########### PLOT ####################################
+#####################################################
+
+
+covariates <- c("GDD", "GDD-1", "GDD-2", "GDD-3", "GDD-4", "GDD-5", "GDD-MA", "WAE CPE",
+                "Lake area", "Littoral area", "Depth", "Mean GDD")
+
+res <- 6
+name_figure <- "MN_YP_effects.jpg"
+jpeg(filename = name_figure, height = 500*res, width = 500*res, res=72*res)
+def.par <- par(no.readonly = TRUE)     # save default, for resetting...
+
+#nf <- layout(matrix(c(1:1),nrow=1,ncol=1,byrow=TRUE),  TRUE) 
+# nf <- layout(matrix(c(1:2), nrow = 1, ncol=2,,byrow=TRUE), widths = c(0.7, 0.3))
+nf <- layout(matrix(c(1:1), nrow = 1, ncol=1,byrow=TRUE))
+layout.show(nf)
+#par(mar=c(1,1,1,1), oma=c(2,2,1,1) )
+par(mar = c(1, 3.5, 0, 0) + 0.1,oma=c(2,1.5,0,0))
+def.par <- par(no.readonly = TRUE)     # save default, for resetting...
+
+size.labels = 1
+size.text = 1
+
+x.label <- 'Estimated effect'
+y.label <- 'Covariate'
+
+# Posterior means and CIs for all parameters
+Plot.data <- cbind(betaEsts,sEsts)
+
+rows <- 1:dim(Plot.data)[2]
+
+Plot.color <- as.numeric(Plot.data[2,] * Plot.data[3,] > 0 )
+colorP <- rep("black", length(rows))
+colorP[Plot.color > 0] <- "blue"
+
+
+plotting.region <- range(Plot.data)
+
+### axis label options
+spc <- 0.23
+lab <- 1:63
+cex <- 0.5
+adj <- 0
+###
+plot(c(plotting.region[1], plotting.region[2]), c(0.5,length(rows)+0.5), 
+     axes=F, xlab='',ylab='',type='n')
+axis(side=1,cex.axis=size.text, mgp=c(0,0.5,0),tck= -0.01) #, at=xlab1, labels=round(xlab2,2)
+#axis(side=2,cex.axis=size.text,  mgp=c(0,0.5,0),tck= -0.01, las=1 ) # at=ylab1, labels=round(ylab2,2)
+axis(side=2,at=c(1:length(rows)),labels=F,tck= -0.01)
+
+text(par("usr")[1] - spc,1:length(rows),srt = 0, adj =adj,
+     labels = covariates, xpd = TRUE,cex=0.7)
+
+# 95% CIs for censored analysis
+segments(x0=Plot.data[2,], x1=Plot.data[3,],
+         y0=1:length(rows), y1=1:length(rows), col=colorP,lwd=1)
+
+# segments(x0=Plot.data[,4], x1=Plot.data[,6],
+#          y0=1:length(rows), y1=1:length(rows), lwd=4, col="blue")
+## Estiamtes from censored model
+points(Plot.data[1,], 1:length(rows), col=colorP ,cex=1, pch=16)
+
+abline(v=0, col="gray")
+# abline(v=out2$mean$mu.ave, col="gray")
+
+# Add x- and y-axis lables
+mtext(x.label, line = 0.8, side = 1, cex = size.text, outer=T, adj=0.6)
+mtext(y.label, line = 0.4, side = 2, cex = size.text, outer=T)
+
+# abline(h=0)
+box()
+
+par(def.par)
+dev.off()
+
 
 
