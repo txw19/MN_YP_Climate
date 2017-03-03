@@ -1,5 +1,6 @@
 # rm(list=ls())
-require(R2jags)
+# require(R2jags)
+library(jagsUI)
 library(MCMCpack) # rwish function
 library(plyr)
 library(data.table)
@@ -16,10 +17,11 @@ cpe_dat[,range(Year)]
 # Number of lakes
 cpe_dat[,length(unique(DOW))]
 # Select species of interest
-cpe_dat <- cpe_dat[, c("dowlknum","Year","walleye","yellow.perch","DOW"), with=FALSE]
+cpe_dat <- cpe_dat[, c("dowlknum","Year","walleye","yellow.perch","northern.pike","DOW"), with=FALSE]
 # log-transfrom CPE
 cpe_dat[, log_yp_cpe:= log(yellow.perch+0.1)]
 cpe_dat[, log_wae_cpe:= log(walleye+0.1)]
+cpe_dat[, log_np_cpe:= log(northern.pike+0.1)]
 
 # Lake predictor data
 lake_dat <- fread("lake_predictors_for_ty.csv") 
@@ -59,6 +61,7 @@ summary(lake_dat_sub)
 
 # Standardize all covariates
 cpe_gdd[, z_wae_cpe:= as.numeric(scale(log_wae_cpe))]
+cpe_gdd[, z_np_cpe:= as.numeric(scale(log_np_cpe))]
 cpe_gdd[, z_gdd:= as.numeric(scale(gdd))]
 cpe_gdd[, z_gdd1:= as.numeric(scale(gdd.lag1))]
 cpe_gdd[, z_gdd2:= as.numeric(scale(gdd.lag2))]
@@ -68,8 +71,9 @@ cpe_gdd[, z_gdd5:= as.numeric(scale(gdd.lag5))]
 cpe_gdd[, z_gddma:= as.numeric(scale(gdd.ma.5))]
 
 head(cpe_gdd)
+dim(cpe_gdd)
 # Correlation among gdd predictors and wae
-gdd_cor <- cpe_gdd[,c(15:22)]
+gdd_cor <- cpe_gdd[,c(17:25)]
 cor(gdd_cor)
 
 # Transform and standardize lake predictors
@@ -83,6 +87,15 @@ lake_dat_sub[, z_gddMean := as.numeric(scale(mean.gdd))]
 lake_cor <- lake_dat_sub[,c(9:14)]
 cor(lake_cor,use = "complete.obs")
 
+# Create lake-level predictors of WAE and NP CPE
+wae_lake <- as.numeric(by(cpe_gdd$log_wae_cpe, cpe_gdd$DOW, mean)) 
+length(wae_lake)
+z_wae_lake <- as.numeric(scale(wae_lake))
+
+np_lake <- as.numeric(by(cpe_gdd$log_np_cpe, cpe_gdd$DOW, mean)) 
+length(np_lake)
+z_np_lake <- as.numeric(scale(np_lake))
+
 # hist(lake_dat_sub$alkalinity)
 #################################################################
 ########## BUGS CODE ############################################
@@ -95,14 +108,14 @@ cat("
     for (i in 1:n){ 
     y[i] ~ dnorm(mu[i], tau)               
       mu[i] <- alpha[group[i]] + b[1] * x1[i] + b[2] * x2[i] + b[3] * x3[i] + b[4] * x4[i] + 
-                                b[5] * x5[i] + b[6] * x6[i] + b[7] * x7[i] + b[8] * x8[i]       
+                                b[5] * x5[i] + b[6] * x6[i] + b[7] * x7[i] + b[8] * x8[i] + b[9] * x9[i]       
     } 
     
     # Level-2 of the model
     for(j in 1:J){
       alpha[j] ~ dnorm(mu.alpha.hat[j],tau.alpha)
       mu.alpha.hat[j] <- mu.alpha + s[1] * z1[j] + s[2] * z2[j] + s[3] * z3[j] + s[4] * z4[j] 
-                          # + s[5] * z5[j]+ s[6] * z6[j] 
+                           + s[5] * z5[j]+ s[6] * z6[j] 
     }
     
     # Priors
@@ -113,12 +126,12 @@ cat("
     # Priors for beta parameters  
     # Bayesian LASSO -  a Laplace (double exponential) prior
     # Level-1 predictors
-    for(k in 1:8){
+    for(k in 1:9){
         b[k] ~ ddexp(0, lambda)
     }
 
     # Level-2 predictors
-    for(k in 1:4){
+    for(k in 1:6){
         s[k] ~ ddexp(0, lambda2)
     }
     
@@ -160,7 +173,11 @@ cpe_gdd[, G := as.numeric(as.factor(as.numeric(DOW)))]
 data <- list(y = cpe_gdd$log_yp_cpe, group = cpe_gdd$G, n = cpe_gdd[,.N], J = J,
              x1 = cpe_gdd$z_gdd, x2 = cpe_gdd$z_gdd1, x3 = cpe_gdd$z_gdd2, x4 = cpe_gdd$z_gdd3,
              x5 = cpe_gdd$z_gdd4, x6 = cpe_gdd$z_gdd5, x7 = cpe_gdd$z_gddma, x8 = cpe_gdd$z_wae_cpe,
-             z1 = lake_dat_sub$z_area, z2 = lake_dat_sub$z_littoral, z3 = lake_dat_sub$z_depth, z4 = lake_dat_sub$z_gddMean)
+             x9 = cpe_gdd$log_np_cpe,
+             z1 = lake_dat_sub$z_area, z2 = lake_dat_sub$z_littoral, z3 = lake_dat_sub$z_depth, z4 = lake_dat_sub$z_gddMean,
+             z5 = z_wae_lake, z6 = z_np_lake)
+
+
 
 
 # Initial values
@@ -185,7 +202,7 @@ start.time = Sys.time()         # Set timer
 # Call JAGS from R 
 
 out <- jags(data, inits, parameters, "model.txt", n.chains = nc, 
-            n.thin = nt, n.iter = ni, n.burnin = nb)
+            n.thin = nt, n.iter = ni, n.burnin = nb, parallel = T)
 
 end.time = Sys.time()
 elapsed.time = round(difftime(end.time, start.time, units='mins'), dig = 2)
@@ -193,34 +210,34 @@ cat('Posterior computed in ', elapsed.time, ' minutes\n\n', sep='')
 # Calculate computation time
 
 # Find which parameters, if any, have Rhat > 1.1
-which(out$BUGSoutput$summary[, c("Rhat")] > 1.1)
+which(out$summary[, c("Rhat")] > 1.1)
 
 
 # Summarize posteriors
 print(out, dig = 3)
 # traceplot(out)
-# outExp <- out$BUGSoutput$summary
+# outExp <- out$summary
 # write.csv(outExp, "ModelSummary.csv", row.names = T)
 
 # str(out)
 
-betaEsts <- matrix(NA, nrow=3,ncol=8)
-for(i in 1:8){
-  betaEsts[1,i] <- mean(quantile(out$BUGSoutput$sims.list$b[,i],c(0.05,0.95)))
-  betaEsts[2:3,i] <- quantile(out$BUGSoutput$sims.list$b[,i],c(0.05,0.95))
+betaEsts <- matrix(NA, nrow=3,ncol=9)
+for(i in 1:9){
+  betaEsts[1,i] <- mean(out$sims.list$b[,i])
+  betaEsts[2:3,i] <- quantile(out$sims.list$b[,i],c(0.025,0.975))
 }
 betaEsts
 
 
-sEsts <- matrix(NA, nrow=3,ncol=4)
-for(i in 1:4){
-  sEsts[1,i] <- mean(quantile(out$BUGSoutput$sims.list$s[,i],c(0.05,0.95)))
-  sEsts[2:3,i] <- quantile(out$BUGSoutput$sims.list$s[,i],c(0.05,0.95))
+sEsts <- matrix(NA, nrow=3,ncol=6)
+for(i in 1:6){
+  sEsts[1,i] <- mean(out$sims.list$s[,i])
+  sEsts[2:3,i] <- quantile(out$sims.list$s[,i],c(0.025,0.975))
 }
 sEsts
 
 
-predicted <- out$BUGSoutput$mean$predictY
+predicted <- out$mean$predictY
 observed <- cpe_gdd$log_yp_cpe
 
 res <- 6
@@ -259,8 +276,8 @@ dev.off()
 rmse(observed, predicted)
 
 rmse_sim <- numeric()
-for(i in 1:out$BUGSoutput$n.sims){
-  rmse_sim[i] <- rmse(observed, out$BUGSoutput$sims.list$predictY[i,])
+for(i in 1:out$mcmc.info$n.samples){
+  rmse_sim[i] <- rmse(observed, out$sims.list$predictY[i,])
   
 }
 
@@ -272,8 +289,8 @@ quantile(rmse_sim, c(0.05, 0.95))
 #####################################################
 
 
-covariates <- c("GDD", "GDD-1", "GDD-2", "GDD-3", "GDD-4", "GDD-5", "GDD-MA", "WAE CPE",
-                "Lake area", "Littoral area", "Depth", "Mean GDD")
+covariates <- c("GDD", "GDD-1", "GDD-2", "GDD-3", "GDD-4", "GDD-5", "GDD-MA", "WAE CPE","NP CPE",
+                "Lake area", "Littoral area", "Depth", "Mean GDD", "Mean WAE", "Mean NP")
 
 res <- 6
 name_figure <- "MN_YP_effects.jpg"
@@ -285,7 +302,7 @@ def.par <- par(no.readonly = TRUE)     # save default, for resetting...
 nf <- layout(matrix(c(1:1), nrow = 1, ncol=1,byrow=TRUE))
 layout.show(nf)
 #par(mar=c(1,1,1,1), oma=c(2,2,1,1) )
-par(mar = c(1, 3.5, 0, 0) + 0.1,oma=c(2,1.5,0,0))
+par(mar = c(1, 3.7, 0, 0) + 0.1,oma=c(2,1.5,0,0))
 def.par <- par(no.readonly = TRUE)     # save default, for resetting...
 
 size.labels = 1
@@ -307,7 +324,7 @@ colorP[Plot.color > 0] <- "blue"
 plotting.region <- range(Plot.data)
 
 ### axis label options
-spc <- 0.23
+spc <- 0.26
 lab <- 1:63
 cex <- 0.5
 adj <- 0
