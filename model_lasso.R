@@ -320,6 +320,9 @@ Plot.color <- as.numeric(Plot.data[2,] * Plot.data[3,] > 0 )
 colorP <- rep("black", length(rows))
 colorP[Plot.color > 0] <- "blue"
 
+pchP <- rep(16, length(covariates))
+pchP[10:15] <- 15
+
 
 plotting.region <- range(Plot.data)
 
@@ -345,7 +348,7 @@ segments(x0=Plot.data[2,], x1=Plot.data[3,],
 # segments(x0=Plot.data[,4], x1=Plot.data[,6],
 #          y0=1:length(rows), y1=1:length(rows), lwd=4, col="blue")
 ## Estiamtes from censored model
-points(Plot.data[1,], 1:length(rows), col=colorP ,cex=1, pch=16)
+points(Plot.data[1,], 1:length(rows), col=colorP ,cex=1, pch=pchP)
 
 abline(v=0, col="gray")
 # abline(v=out2$mean$mu.ave, col="gray")
