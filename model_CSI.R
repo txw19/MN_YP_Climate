@@ -327,8 +327,11 @@ colorP[Plot.color > 0] <- "blue"
 # pchP <- rep(16, length(covariates))
 # pchP[10:15] <- 15
 
+pchP <- 15
 
 plotting.region <- range(Ests)
+
+
 
 ### axis label options
 spc <- 0.26
