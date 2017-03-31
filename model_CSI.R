@@ -226,9 +226,9 @@ parameters <- c("mu.alpha","sigma", "sigma.alpha","b","lambda1","lambda2","lambd
 
 
 # MCMC settings
-ni <- 90000
+ni <- 110000
 nt <- 2
-nb <- 70000
+nb <- 80000
 nc <- 3
 
 
@@ -252,8 +252,8 @@ print(out, dig = 3)
 # traceplot(out)
 # outExp2 <- out$summary
 # write.csv(outExp2, "CSI_ModelSummary.csv", row.names = T)
-# mcmcOut <- out$sims.list
-# saveRDS(mcmcOut, file="CSI_mcmc_out.rds")
+mcmcOut <- out$sims.list
+saveRDS(mcmcOut, file="CSI_mcmc_out.rds")
 
 # str(out)
 
