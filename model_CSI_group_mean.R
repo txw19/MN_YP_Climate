@@ -59,6 +59,15 @@ lake_dat_sub[,.N]
 # write.csv(lake_dat_sub,"lake_data.csv",row.names=F)
 summary(lake_dat_sub)
 
+##### Remove 1 lake with missing Secchi
+lake_dat_sub <- lake_dat_sub[!is.na(lake_dat_sub$Secchi.lake.mean),]
+summary(lake_dat_sub)
+
+# Remove this lake from cpe_gdd
+cpe_gdd <- cpe_gdd[cpe_gdd$DOW %in% lake_dat_sub$DOW,]
+summary(cpe_gdd)
+length(unique(cpe_gdd$DOW))
+
 
 # raw.data[ , group_std_outcome := (outcome - mean(outcome, na.rm = TRUE)) /  
 #             sd(outcome, na.rm = TRUE), "group"]
@@ -90,7 +99,7 @@ lake_dat_sub[, z_depth := as.numeric(scale(log(max_depth_m)))]
 lake_dat_sub[, z_secchi := as.numeric(scale(Secchi.lake.mean))]
 lake_dat_sub[, z_alk := as.numeric(scale(alkalinity))]
 lake_dat_sub[, z_gddMean := as.numeric(scale(mean.gdd))]
-
+# summary(lake_dat_sub)
 lake_cor <- lake_dat_sub[,c(9:14)]
 cor(lake_cor,use = "complete.obs")
 
@@ -132,31 +141,31 @@ cat("
     BB[j,1:K] ~ dmnorm(BB.hat[j,], Tau.B[,]) # bivriate normal
     
     BB.hat[j,1] <- mu.alpha + s1[1] * z1[j] + s1[2] * z2[j] + s1[3] * z3[j] + s1[4] * z4[j] 
-      + s1[5] * z5[j] + s1[6] * z6[j] 
+      + s1[5] * z5[j] + s1[6] * z6[j] + s1[7] * z7[j]
       BB.hat[j,2] <- mu.beta1 + s2[1] * z1[j] + s2[2] * z2[j] + s2[3] * z3[j] + s2[4] * z4[j] 
-      + s2[5] * z5[j] + s2[6] * z6[j] 
+      + s2[5] * z5[j] + s2[6] * z6[j]  + s2[7] * z7[j]
       BB.hat[j,3] <- mu.beta2 + s3[1] * z1[j] + s3[2] * z2[j] + s3[3] * z3[j] + s3[4] * z4[j] 
-      + s3[5] * z5[j] + s3[6] * z6[j] 
+      + s3[5] * z5[j] + s3[6] * z6[j]  + s3[7] * z7[j]
       BB.hat[j,4] <- mu.beta3 + s4[1] * z1[j] + s4[2] * z2[j] + s4[3] * z3[j] + s4[4] * z4[j] 
-      + s4[5] * z5[j] + s4[6] * z6[j] 
+      + s4[5] * z5[j] + s4[6] * z6[j]  + s4[7] * z7[j]
     }
     
     
     # Bayesian LASSO -  a Laplace (double exponential) prior
     # Level-2 predictors
-    for(k in 1:6){
+    for(k in 1:7){
     s1[k] ~ ddexp(0, lambda1)
     }
     
-    for(k in 1:6){
+    for(k in 1:7){
     s2[k] ~ ddexp(0, lambda2)
     }
 
-    for(k in 1:6){
+    for(k in 1:7){
     s3[k] ~ ddexp(0, lambda3)
     }
 
-    for(k in 1:6){
+    for(k in 1:7){
     s4[k] ~ ddexp(0, lambda4)
     }
     
@@ -215,7 +224,7 @@ W <- diag(K)
 data <- list(y = cpe_gdd$log_yp_cpe, group = cpe_gdd$G, n = cpe_gdd[,.N], J = J,
              x1 = cpe_gdd$z_gdd1, x2 = cpe_gdd$z_wae_cpe, x3 = cpe_gdd$log_np_cpe,
              z1 = lake_dat_sub$z_area, z2 = lake_dat_sub$z_littoral, z3 = lake_dat_sub$z_depth, z4 = lake_dat_sub$z_gddMean,
-             z5 = z_wae_lake, z6 = z_np_lake,
+             z5 = lake_dat_sub$z_secchi, z6 = z_wae_lake, z7 = z_np_lake,
              K=K,W=W)
 
 
@@ -265,29 +274,29 @@ saveRDS(mcmcOut, file="CSI_mcmc_out_group_mean.rds")
 # str(out)
 
 
-sEsts1 <- matrix(NA, nrow=3,ncol=6)
-for(i in 1:6){
+sEsts1 <- matrix(NA, nrow=3,ncol=7)
+for(i in 1:7){
   sEsts1[1,i] <- mean(out$sims.list$s1[,i])
   sEsts1[2:3,i] <- quantile(out$sims.list$s1[,i],c(0.025,0.975))
 }
 sEsts1
 
-sEsts2 <- matrix(NA, nrow=3,ncol=6)
-for(i in 1:6){
+sEsts2 <- matrix(NA, nrow=3,ncol=7)
+for(i in 1:7){
   sEsts2[1,i] <- mean(out$sims.list$s2[,i])
   sEsts2[2:3,i] <- quantile(out$sims.list$s2[,i],c(0.025,0.975))
 }
 sEsts2
 
-sEsts3 <- matrix(NA, nrow=3,ncol=6)
-for(i in 1:6){
+sEsts3 <- matrix(NA, nrow=3,ncol=7)
+for(i in 1:7){
   sEsts3[1,i] <- mean(out$sims.list$s3[,i])
   sEsts3[2:3,i] <- quantile(out$sims.list$s3[,i],c(0.025,0.975))
 }
 sEsts3
 
-sEsts4 <- matrix(NA, nrow=3,ncol=6)
-for(i in 1:6){
+sEsts4 <- matrix(NA, nrow=3,ncol=7)
+for(i in 1:7){
   sEsts4[1,i] <- mean(out$sims.list$s4[,i])
   sEsts4[2:3,i] <- quantile(out$sims.list$s4[,i],c(0.025,0.975))
 }
@@ -301,10 +310,10 @@ Ests <- cbind(sEsts1, sEsts2, sEsts3, sEsts4)
 #####################################################
 
 
-covariates <- c("Lake area", "Littoral area", "Depth", "Mean GDD", "Mean WAE", "Mean NP")
+covariates <- c("Lake area", "Littoral area", "Depth", "Mean GDD","Secchi", "Mean WAE", "Mean NP")
 
 res <- 6
-name_figure <- "CSI_MN_YP_effects.jpg"
+name_figure <- "CSI_MN_YP_effects_group_mean.jpg"
 jpeg(filename = name_figure, height = 500*res, width = 500*res, res=72*res)
 def.par <- par(no.readonly = TRUE)     # save default, for resetting...
 
@@ -313,7 +322,7 @@ def.par <- par(no.readonly = TRUE)     # save default, for resetting...
 nf <- layout(matrix(c(1:4), nrow = 2, ncol=2,byrow=TRUE))
 layout.show(nf)
 #par(mar=c(1,1,1,1), oma=c(2,2,1,1) )
-par(mar = c(1, 3.7, 0, 0) + 0.1,oma=c(2,1.5,0,0))
+par(mar = c(1, 4.0, 0, 0) + 0.1,oma=c(2,1.5,0,0))
 def.par <- par(no.readonly = TRUE)     # save default, for resetting...
 
 size.labels = 1
@@ -323,7 +332,7 @@ x.label <- 'Estimated effect'
 y.label <- 'Covariate'
 
 # Posterior means and CIs for all parameters
-Plot.data <- Ests[,1:6]
+Plot.data <- Ests[,1:7]
 
 rows <- 1:dim(Plot.data)[2]
 
@@ -341,7 +350,7 @@ plotting.region <- range(Ests)
 
 
 ### axis label options
-spc <- 0.26
+spc <- 0.24
 lab <- 1:63
 cex <- 0.5
 adj <- 0
@@ -370,7 +379,7 @@ abline(v=0, col="gray")
 # Add x- and y-axis lables
 # mtext(x.label, line = 0.8, side = 1, cex = size.text, outer=T, adj=0.6)
 # mtext(y.label, line = 0.4, side = 2, cex = size.text, outer=T)
-text(-0.4,6.4,"Lake mean YP CEP", cex=0.8)
+text(-0.36,7.4,"Lake mean YP CEP", cex=0.8)
 
 
 # abline(h=0)
@@ -379,7 +388,7 @@ box()
 
 ############## PLOT 2
 # Posterior means and CIs for all parameters
-Plot.data <- Ests[,7:12]
+Plot.data <- Ests[,8:14]
 
 par(mar = c(1, 1, 0, 0) )
 
@@ -425,7 +434,7 @@ abline(v=0, col="gray")
 # mtext(x.label, line = 0.8, side = 1, cex = size.text, outer=T, adj=0.6)
 # mtext(y.label, line = 0.4, side = 2, cex = size.text, outer=T)
 
-text(-0.32,6.4,"Effect of GDD (lag 1) on YP CEP", cex=0.8)
+text(-0.30,7.4,"Effect of GDD (lag 1) on YP CEP", cex=0.8)
 
 
 # abline(h=0)
@@ -434,9 +443,9 @@ box()
 
 ############## PLOT 3
 # Posterior means and CIs for all parameters
-Plot.data <- Ests[,13:18]
+Plot.data <- Ests[,15:21]
 
-par(mar = c(1, 3.7, 0, 0) )
+par(mar = c(1, 4.0, 0, 0) )
 
 rows <- 1:dim(Plot.data)[2]
 
@@ -451,7 +460,7 @@ colorP[Plot.color > 0] <- "blue"
 
 
 ### axis label options
-spc <- 0.255
+spc <- 0.24
 lab <- 1:63
 cex <- 0.5
 adj <- 0
@@ -481,7 +490,7 @@ abline(v=0, col="gray")
 # mtext(x.label, line = 0.8, side = 1, cex = size.text, outer=T, adj=0.6)
 # mtext(y.label, line = 0.4, side = 2, cex = size.text, outer=T)
 
-text(-0.34,6.4,"Effect of WAE on YP CEP", cex=0.8)
+text(-0.31,7.4,"Effect of WAE on YP CEP", cex=0.8)
 
 
 # abline(h=0)
@@ -490,7 +499,7 @@ box()
 
 ############## PLOT 4
 # Posterior means and CIs for all parameters
-Plot.data <- Ests[,19:24]
+Plot.data <- Ests[,22:28]
 
 par(mar = c(1, 1, 0, 0) + 0.1)
 
@@ -508,7 +517,7 @@ colorP[Plot.color > 0] <- "blue"
 # plotting.region <- range(Plot.data)
 
 ### axis label options
-spc <- 0.001
+spc <- 0.0008
 lab <- 1:63
 cex <- 0.5
 adj <- 0
@@ -538,7 +547,7 @@ abline(v=0, col="gray")
 mtext(x.label, line = 0.8, side = 1, cex = size.text, outer=T, adj=0.5)
 mtext(y.label, line = 0.4, side = 2, cex = size.text, outer=T)
 
-text(-0.4,6.4,"Effect of NP on YP CEP", cex=0.8)
+text(-0.36,7.4,"Effect of NP on YP CEP", cex=0.8)
 
 # abline(h=0)
 box()
