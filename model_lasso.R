@@ -27,6 +27,7 @@ cpe_dat[, log_np_cpe:= log(northern.pike+0.1)]
 lake_dat <- fread("lake_predictors_for_ty.csv") 
 head(lake_dat)
 lake_dat[,.N]
+summary(lake_dat)
 
 # Climate data
 gdd_dat <- fread("gdd_lags.csv")
@@ -58,6 +59,17 @@ lake_dat_sub[,length(DOW)]
 lake_dat_sub[,.N]
 # write.csv(lake_dat_sub,"lake_data.csv",row.names=F)
 summary(lake_dat_sub)
+
+##### Remove 1 lake with missing Secchi
+lake_dat_sub <- lake_dat_sub[!is.na(lake_dat_sub$Secchi.lake.mean),]
+summary(lake_dat_sub)
+
+# Remove this lake from cpe_gdd
+cpe_gdd <- cpe_gdd[cpe_gdd$DOW %in% lake_dat_sub$DOW,]
+summary(cpe_gdd)
+length(unique(cpe_gdd$DOW))
+
+
 
 # Standardize all covariates
 cpe_gdd[, z_wae_cpe:= as.numeric(scale(log_wae_cpe))]
@@ -96,6 +108,8 @@ np_lake <- as.numeric(by(cpe_gdd$log_np_cpe, cpe_gdd$DOW, mean))
 length(np_lake)
 z_np_lake <- as.numeric(scale(np_lake))
 
+
+
 # hist(lake_dat_sub$alkalinity)
 #################################################################
 ########## BUGS CODE ############################################
@@ -115,7 +129,7 @@ cat("
     for(j in 1:J){
       alpha[j] ~ dnorm(mu.alpha.hat[j],tau.alpha)
       mu.alpha.hat[j] <- mu.alpha + s[1] * z1[j] + s[2] * z2[j] + s[3] * z3[j] + s[4] * z4[j] 
-                           + s[5] * z5[j]+ s[6] * z6[j] 
+                           + s[5] * z5[j]+ s[6] * z6[j] + s[7] * z7[j]
     }
     
     # Priors
@@ -131,7 +145,7 @@ cat("
     }
 
     # Level-2 predictors
-    for(k in 1:6){
+    for(k in 1:7){
         s[k] ~ ddexp(0, lambda2)
     }
     
@@ -175,7 +189,7 @@ data <- list(y = cpe_gdd$log_yp_cpe, group = cpe_gdd$G, n = cpe_gdd[,.N], J = J,
              x5 = cpe_gdd$z_gdd4, x6 = cpe_gdd$z_gdd5, x7 = cpe_gdd$z_gddma, x8 = cpe_gdd$z_wae_cpe,
              x9 = cpe_gdd$log_np_cpe,
              z1 = lake_dat_sub$z_area, z2 = lake_dat_sub$z_littoral, z3 = lake_dat_sub$z_depth, z4 = lake_dat_sub$z_gddMean,
-             z5 = z_wae_lake, z6 = z_np_lake)
+             z5 = lake_dat_sub$z_secchi , z6 = z_wae_lake, z7 = z_np_lake )
 
 
 
@@ -188,7 +202,7 @@ inits <- function (){
 
 # Parameters monitored
 parameters <- c("mu.alpha","sigma", "sigma.alpha","b","lambda",
-                "predictY","marginalR2","conditionalR2","lambda2","s")
+                "marginalR2","conditionalR2","lambda2","s")
 
 
 # MCMC settings
@@ -216,9 +230,10 @@ which(out$summary[, c("Rhat")] > 1.1)
 # Summarize posteriors
 print(out, dig = 3)
 # traceplot(out)
-# outExp <- out$summary
-# write.csv(outExp, "ModelSummary.csv", row.names = T)
-
+outExp <- out$summary
+write.csv(outExp, "ModelSummary.csv", row.names = T)
+mcmcOut <- out$sims.list
+saveRDS(mcmcOut, file="lasso_out.rds")
 # str(out)
 
 betaEsts <- matrix(NA, nrow=3,ncol=9)
@@ -229,8 +244,8 @@ for(i in 1:9){
 betaEsts
 
 
-sEsts <- matrix(NA, nrow=3,ncol=6)
-for(i in 1:6){
+sEsts <- matrix(NA, nrow=3,ncol=7)
+for(i in 1:7){
   sEsts[1,i] <- mean(out$sims.list$s[,i])
   sEsts[2:3,i] <- quantile(out$sims.list$s[,i],c(0.025,0.975))
 }
@@ -239,50 +254,50 @@ sEsts
 
 predicted <- out$mean$predictY
 observed <- cpe_gdd$log_yp_cpe
-
-res <- 6
-name_figure <- "observed_predicted_cpe.jpg"
-jpeg(filename = name_figure, height = 500*res, width = 500*res, res=72*res)
-def.par <- par(no.readonly = TRUE) 		# save default, for resetting...
-
-nf <- layout(matrix(c(1:1),nrow=1,ncol=1,byrow=TRUE),  TRUE) 
-layout.show(nf)
-par(mar=c(0.5,0.5,0,0), oma=c(2,2,0,0) )
-
-size.labels = 1
-size.text = 1.0
-y.label = expression(paste('Predicted ',log[e],'(CPE)' ))
-x.label = expression(paste('Observed ',log[e],'(CPE)' ))
-
-plot(predicted ~ observed, type='n', axes=F, ylim=c(min(predicted), max(predicted)),
-     xlab='',ylab='', xlim=c(min(observed),max(observed)) )
-axis(side=1,cex.axis=size.text, tck=-0.01, mgp=c(0,0.3,0) )
-axis(side=2,cex.axis=size.text, las=1, mgp=c(0,0.3,0),tck=-0.01)
-
-# Add data points
-points(observed, predicted, pch=16, cex=1.0, col='black')
-
-# Add axis labels
-mtext(x.label, line = 0.7, side = 1, cex = size.text, outer=T)
-mtext(y.label, line = 0.5, side = 2, cex = size.text, outer=T)
-abline(0,1, lwd=2, col="blue")
-
-box()
-par(def.par)
-dev.off()
-### END PLOT
-
-## Calculate RMSE
-rmse(observed, predicted)
-
-rmse_sim <- numeric()
-for(i in 1:out$mcmc.info$n.samples){
-  rmse_sim[i] <- rmse(observed, out$sims.list$predictY[i,])
-  
-}
-
-mean(rmse_sim)
-quantile(rmse_sim, c(0.05, 0.95))
+# 
+# res <- 6
+# name_figure <- "observed_predicted_cpe.jpg"
+# jpeg(filename = name_figure, height = 500*res, width = 500*res, res=72*res)
+# def.par <- par(no.readonly = TRUE) 		# save default, for resetting...
+# 
+# nf <- layout(matrix(c(1:1),nrow=1,ncol=1,byrow=TRUE),  TRUE) 
+# layout.show(nf)
+# par(mar=c(0.5,0.5,0,0), oma=c(2,2,0,0) )
+# 
+# size.labels = 1
+# size.text = 1.0
+# y.label = expression(paste('Predicted ',log[e],'(CPE)' ))
+# x.label = expression(paste('Observed ',log[e],'(CPE)' ))
+# 
+# plot(predicted ~ observed, type='n', axes=F, ylim=c(min(predicted), max(predicted)),
+#      xlab='',ylab='', xlim=c(min(observed),max(observed)) )
+# axis(side=1,cex.axis=size.text, tck=-0.01, mgp=c(0,0.3,0) )
+# axis(side=2,cex.axis=size.text, las=1, mgp=c(0,0.3,0),tck=-0.01)
+# 
+# # Add data points
+# points(observed, predicted, pch=16, cex=1.0, col='black')
+# 
+# # Add axis labels
+# mtext(x.label, line = 0.7, side = 1, cex = size.text, outer=T)
+# mtext(y.label, line = 0.5, side = 2, cex = size.text, outer=T)
+# abline(0,1, lwd=2, col="blue")
+# 
+# box()
+# par(def.par)
+# dev.off()
+# ### END PLOT
+# 
+# ## Calculate RMSE
+# rmse(observed, predicted)
+# 
+# rmse_sim <- numeric()
+# for(i in 1:out$mcmc.info$n.samples){
+#   rmse_sim[i] <- rmse(observed, out$sims.list$predictY[i,])
+#   
+# }
+# 
+# mean(rmse_sim)
+# quantile(rmse_sim, c(0.05, 0.95))
 
 #####################################################
 ########### PLOT ####################################
@@ -290,7 +305,7 @@ quantile(rmse_sim, c(0.05, 0.95))
 
 
 covariates <- c("GDD", "GDD-1", "GDD-2", "GDD-3", "GDD-4", "GDD-5", "GDD-MA", "WAE CPE","NP CPE",
-                "Lake area", "Littoral area", "Depth", "Mean GDD", "Mean WAE", "Mean NP")
+                "Lake area", "Littoral area", "Depth", "Mean GDD", "Secchi","Mean WAE", "Mean NP")
 
 res <- 6
 name_figure <- "MN_YP_effects.jpg"
@@ -327,7 +342,7 @@ pchP[10:15] <- 15
 plotting.region <- range(Plot.data)
 
 ### axis label options
-spc <- 0.26
+spc <- 0.23
 lab <- 1:63
 cex <- 0.5
 adj <- 0
